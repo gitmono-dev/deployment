@@ -1,3 +1,7 @@
+variable "region" {
+  type        = string
+  description = "AWS region"
+}
 variable "cluster_name" {}
 variable "task_family" {}
 variable "environment" {}
@@ -21,3 +25,21 @@ variable "subnet_ids" {
   type        = list(string)
 }
 variable "security_group_ids" { type = list(string) }
+
+variable "load_balancers" {
+  description = "List of load balancers for this service. Each item should have target_group_arn, container_name, container_port, host_header"
+  type = list(object({
+    target_group_arn = string
+    container_name   = string
+    container_port   = number
+    host_headers     = list(string)
+    priority         = number
+  }))
+  default = []
+}
+
+variable "alb_listener_arn" {
+  description = "ARN of the ALB listener"
+  type        = string
+  default     = null
+}

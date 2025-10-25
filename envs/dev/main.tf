@@ -1,11 +1,16 @@
+locals {
+  base_domain = "gitmega.dev"
+  region      = "us-west-2"
+}
+
 provider "aws" {
-  region = "us-west-2"
+  region = local.region
 }
 
 module "vpc" {
   source              = "../../modules/vpc"
   vpc_cidr            = "10.0.0.0/16"
-  region              = "us-west-2"
+  region              = local.region
   public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 }
 
@@ -23,23 +28,51 @@ module "efs" {
 }
 
 
-#EC2 实例挂载 EFS
-module "ec2" {
-  source        = "../../modules/ec2"
-  name          = "efs-editor"
-  ami           = "ami-0caa91d6b7bee0ed0" ## Amazon Linux 2023（内核-6.1）
-  instance_type = "t2.micro"
-  subnet_ids    = module.vpc.public_subnet_ids
-  vpc_id        = module.vpc.vpc_id
-  efs_id        = module.efs.file_system_id
-  mount_point   = "/mnt/efs"
-  efs_sg_id     = module.efs.security_group_id
+module "acm" {
+  source      = "../../modules/acm"
+  domain_name = "*.${local.base_domain}"
 }
 
+module "alb" {
+  source              = "../../modules/alb"
+  name                = "mega-alb"
+  vpc_id              = module.vpc.vpc_id
+  subnet_ids          = module.vpc.public_subnet_ids
+  acm_certificate_arn = module.acm.certificate_arn
+  security_group_ids  = [module.sg.sg_id]
+  target_groups = {
+    mega_ui = {
+      name              = "mega-ui"
+      port              = 3000
+      health_check_path = "/api/health"
+    }
+    campsite_api = {
+      name              = "campsite-api"
+      port              = 8080
+      health_check_path = "/health"
+    }
+    mono_engine = {
+      name              = "mono-engine"
+      port              = 8000
+      health_check_path = "/api/v1/status"
+    }
+    sync_server = {
+      name              = "sync-server"
+      port              = 9000
+      health_check_path = "/"
+    }
+    orion_server = {
+      name              = "orion-server"
+      port              = 8004
+      health_check_path = "/"
+    }
+  }
+}
 
 
 module "mono-engine" {
   source             = "../../modules/ecs"
+  region             = local.region
   cluster_name       = "mega-app"
   task_family        = "mono-engine-task"
   container_name     = "app"
@@ -50,7 +83,41 @@ module "mono-engine" {
   memory             = "512"
   subnet_ids         = module.vpc.public_subnet_ids
   security_group_ids = [module.sg.sg_id]
-  environment        = []
+  environment = [
+    {
+      "name" : "MEGA_AUTHENTICATION__ENABLE_HTTP_PUSH",
+      "value" : "true"
+    },
+    {
+      "name" : "MEGA_BUILD__ENABLE_BUILD",
+      "value" : "true"
+    },
+    {
+      "name" : "MEGA_DATABASE__ACQUIRE_TIMEOUT",
+      "value" : "3"
+    },
+    {
+      "name" : "MEGA_DATABASE__CONNECT_TIMEOUT",
+      "value" : "3"
+    },
+    {
+      "name" : "MEGA_DATABASE__DB_URL",
+      "value" : "postgres://${var.db_username}:${var.db_password}@${module.rds_pg.db_endpoint}/mono?sslmode=require"
+    },
+    {
+      "name" : "MEGA_LOG__LEVEL",
+      "value" : "info"
+    },
+  ]
+
+  load_balancers = [{
+    target_group_arn = module.alb.target_group_arns["mono_engine"]
+    container_name   = "app"
+    container_port   = 8000
+    host_headers     = ["git.${local.base_domain}"]
+    priority         = 100
+  }]
+  alb_listener_arn = module.alb.https_listener_arn
 
   efs_volume = {
     name           = "volumn1"
@@ -73,6 +140,7 @@ module "mono-engine" {
 
 module "mega-ui-app" {
   source             = "../../modules/ecs"
+  region             = local.region
   cluster_name       = "mega-app"
   task_family        = "mega-ui-task"
   container_name     = "app"
@@ -84,10 +152,19 @@ module "mega-ui-app" {
   subnet_ids         = module.vpc.public_subnet_ids
   security_group_ids = [module.sg.sg_id]
   environment        = []
+  load_balancers = [{
+    target_group_arn = module.alb.target_group_arns["mega_ui"]
+    container_name   = "app"
+    container_port   = 3000
+    host_headers     = ["app.${local.base_domain}"]
+    priority         = 200
+  }]
+  alb_listener_arn = module.alb.https_listener_arn
 }
 
 module "mega-web-sync-app" {
   source             = "../../modules/ecs"
+  region             = local.region
   cluster_name       = "mega-app"
   task_family        = "mega-web-sync-task"
   container_name     = "app"
@@ -105,14 +182,23 @@ module "mega-web-sync-app" {
     },
     {
       "name" : "NEXT_PUBLIC_SYNC_URL",
-      "value" : "ws://sync.gitmega.com"
+      "value" : "ws://sync.${local.base_domain}"
     },
   ]
+  load_balancers = [{
+    target_group_arn = module.alb.target_group_arns["sync_server"]
+    container_name   = "app"
+    container_port   = 9000
+    host_headers     = ["sync.${local.base_domain}"]
+    priority         = 300
+  }]
+  alb_listener_arn = module.alb.https_listener_arn
 }
 
 
 module "orion-server-app" {
   source             = "../../modules/ecs"
+  region             = local.region
   cluster_name       = "mega-app"
   task_family        = "orion-server-task"
   container_name     = "app"
@@ -126,7 +212,7 @@ module "orion-server-app" {
   environment = [
     {
       "name" : "MONOBASE_URL",
-      "value" : "https://git.gitmega.com"
+      "value" : "https://git.${local.base_domain}"
     },
     {
       "name" : "BUILD_LOG_DIR",
@@ -142,15 +228,23 @@ module "orion-server-app" {
     },
     {
       "name" : "ALLOWED_CORS_ORIGINS",
-      "value" : "http://local.gitmega.com, https://app.gitmega.com, http://app.gitmono.test"
+      "value" : "http://local.${local.base_domain}, https://app.${local.base_domain}, http://app.gitmono.test"
     }
   ]
-  mount_points = []
+  load_balancers = [{
+    target_group_arn = module.alb.target_group_arns["orion_server"]
+    container_name   = "app"
+    container_port   = 8004
+    host_headers     = ["orion.${local.base_domain}"]
+    priority         = 400
+  }]
+  alb_listener_arn = module.alb.https_listener_arn
 }
 
 
 module "campsite-api-app" {
   source             = "../../modules/ecs"
+  region             = local.region
   cluster_name       = "mega-app"
   task_family        = "campsite-api-task"
   container_name     = "app"
@@ -164,7 +258,7 @@ module "campsite-api-app" {
   environment = [
     {
       "name" : "DEV_APP_URL",
-      "value" : "http://app.gitmega.com"
+      "value" : "http://app.${local.base_domain}"
     },
     {
       "name" : "PORT",
@@ -183,6 +277,15 @@ module "campsite-api-app" {
       "value" : "bundle exec puma"
     }
   ]
+  load_balancers = [{
+    target_group_arn = module.alb.target_group_arns["campsite_api"]
+    container_name   = "app"
+    container_port   = 8080
+    host_headers     = ["api.${local.base_domain}", "auth.${local.base_domain}"]
+    priority         = 500
+  }]
+  alb_listener_arn = module.alb.https_listener_arn
+
 }
 
 
@@ -202,6 +305,7 @@ module "rds_pg" {
   security_group_ids  = [module.sg.sg_id]
 }
 
+
 # module "rds_mysql" {
 #   source             = "../../modules/rds"
 #   engine             = "mysql"
@@ -218,10 +322,11 @@ module "rds_pg" {
 #   security_group_ids = [module.sg.sg_id]
 # }
 
-output "ec2_ip" {
-  value = module.ec2.public_ip
-}
 
 output "pg_endpoint" {
   value = module.rds_pg.db_endpoint
+}
+
+output "alb_dns_name" {
+  value = module.alb.alb_dns_name
 }

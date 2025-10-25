@@ -12,7 +12,7 @@ variable "vpc_cidr" {
 
 variable "region" {
   type        = string
-  description = "AWS region, e.g. us-west-2"
+  description = "AWS region"
 }
 
 variable "public_subnet_cidrs" {

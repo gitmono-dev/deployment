@@ -37,7 +37,7 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = "us-west-2"
+          awslogs-region        = var.region
           awslogs-stream-prefix = "ecs"
         }
       }
@@ -68,6 +68,34 @@ resource "aws_ecs_service" "app" {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
     assign_public_ip = true
+  }
+  dynamic "load_balancer" {
+    for_each = var.load_balancers
+    content {
+      target_group_arn = load_balancer.value.target_group_arn
+      container_name   = load_balancer.value.container_name
+      container_port   = load_balancer.value.container_port
+    }
+  }
+
+  depends_on = [aws_ecs_task_definition.app]
+}
+
+resource "aws_lb_listener_rule" "this" {
+  for_each = { for idx, lb in var.load_balancers : idx => lb if lb.host_headers != "" }
+
+  listener_arn = var.alb_listener_arn
+  priority     = each.value.priority
+
+  action {
+    type             = "forward"
+    target_group_arn = each.value.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = each.value.host_headers
+    }
   }
 }
 
