@@ -64,6 +64,99 @@ cd envs/dev
 terraform apply
 ```
 
+## GCP Deployment (dev / staging / prod)
+
+This repository contains Terraform configurations for deploying Mega to GCP under:
+
+- `deployment/envs/gcp/dev`
+- `deployment/envs/gcp/staging`
+- `deployment/envs/gcp/prod`
+
+Each environment directory contains:
+
+- `main.tf`
+- `variables.tf`
+- `providers.tf`
+- `versions.tf`
+- `terraform.tfvars.example`
+
+### Prerequisites
+
+- Install `gcloud` and authenticate
+- Ensure you have permissions to create: VPC, GKE, Cloud SQL, Memorystore, Filestore, Artifact Registry, Cloud Logging/Monitoring
+
+Recommended API enablement:
+
+```bash
+gcloud services enable \
+  container.googleapis.com \
+  artifactregistry.googleapis.com \
+  sqladmin.googleapis.com \
+  servicenetworking.googleapis.com \
+  redis.googleapis.com \
+  file.googleapis.com \
+  logging.googleapis.com \
+  monitoring.googleapis.com
+```
+
+### Configure variables
+
+Copy the example file and edit values.
+
+```bash
+cd deployment/envs/gcp/dev
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Sensitive values should be provided via environment variables when using CI/CD:
+
+```bash
+export TF_VAR_db_username="mega_user"
+export TF_VAR_db_password="your-db-password"
+export TF_VAR_rails_master_key="your-rails-master-key"
+```
+
+### Apply
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+### Get GKE credentials
+
+After the cluster is created:
+
+```bash
+gcloud container clusters get-credentials mega-gke --region us-central1 --project YOUR_PROJECT_ID
+```
+
+### Verify logging & monitoring
+
+- GKE cluster is configured with Cloud Logging and Cloud Monitoring.
+- You can validate by checking Cloud Console:
+  - Logging: Logs Explorer (resource type `k8s_container`)
+  - Monitoring: Kubernetes Engine dashboards
+
+### E2E validation (GKE / Orion Worker)
+
+See `deployment/gcp/e2e/README.e2e.md`.
+
+Example:
+
+```bash
+kubectl apply -f deployment/gcp/e2e/connectivity-check-job.yaml
+kubectl -n orion-worker wait --for=condition=complete job/orion-worker-connectivity-check --timeout=120s
+kubectl -n orion-worker logs job/orion-worker-connectivity-check
+```
+
+### Destroy / rollback
+
+```bash
+terraform destroy
+```
+
 ## Inspect state
 
 When you applied your configuration, Terraform wrote data about your infrastructure into a file called `terraform.tfstate`. Terraform stores data about your infrastructure in its state file, which it uses to manage resources over their lifecycle.
