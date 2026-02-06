@@ -76,6 +76,11 @@ vpc_connector_name        = "mega-prod-cr-conn"
 # vpc_connector_cidr       = "10.43.0.0/28"  # optional: leave null for auto
 cloud_run_vpc_egress       = "private-ranges-only"
 
+# HTTPS Load Balancer & Routing Strategy (Milestone A)
+enable_lb            = true
+lb_domain            = "buck2hub.com"
+lb_api_path_prefixes = ["/api/v1", "/info/lfs"]
+
 enable_logging            = true
 enable_monitoring         = true
 enable_alerts             = true
