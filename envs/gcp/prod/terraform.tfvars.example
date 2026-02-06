@@ -90,11 +90,6 @@ enable_lb            = true
 lb_domain            = "buck2hub.com"
 lb_api_path_prefixes = ["/api/v1", "/info/lfs"]
 
-# HTTPS Load Balancer & Routing Strategy (Milestone A)
-enable_lb            = true
-lb_domain            = "buck2hub.com"
-lb_api_path_prefixes = ["/api/v1", "/info/lfs"]
-
 enable_logging            = true
 enable_monitoring         = true
 enable_alerts             = true
