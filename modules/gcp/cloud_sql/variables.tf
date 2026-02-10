@@ -18,6 +18,12 @@ variable "tier" {
   description = "Instance tier"
 }
 
+variable "edition" {
+  type        = string
+  default     = "ENTERPRISE"
+  description = "Cloud SQL edition (e.g. ENTERPRISE or ENTERPRISE_PLUS)"
+}
+
 variable "disk_size" {
   type        = number
   default     = 20
