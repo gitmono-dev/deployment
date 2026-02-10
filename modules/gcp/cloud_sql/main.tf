@@ -22,6 +22,7 @@ resource "google_sql_database_instance" "this" {
 
   settings {
     tier              = var.tier
+    edition           = var.edition
     availability_type = var.availability_type
     disk_size         = var.disk_size
     disk_type         = var.disk_type

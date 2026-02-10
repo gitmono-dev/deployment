@@ -25,6 +25,23 @@ variable "base_domain" {
   default = ""
 }
 
+variable "enable_build_env" {
+  type        = bool
+  description = "Enable Artifact Registry build environment (repository for Cloud Run images)."
+  default     = false
+}
+
+variable "artifact_registry_location" {
+  type    = string
+  default = "us-central1"
+}
+
+variable "artifact_registry_repo" {
+  type        = string
+  description = "Artifact Registry repository name"
+  default     = "mega-prod"
+}
+
 
 variable "enable_gcs" {
   type    = bool

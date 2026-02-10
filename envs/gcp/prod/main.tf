@@ -1,4 +1,5 @@
 locals {
+  enable_build_env = var.enable_build_env
   enable_gcs       = var.enable_gcs
   enable_cloud_sql = var.enable_cloud_sql
   enable_redis     = var.enable_redis
@@ -33,6 +34,14 @@ locals {
 }
 
 # GKE related modules disabled/removed, Cloud Run introduced for app service
+
+module "artifact_registry" {
+  count  = local.enable_build_env ? 1 : 0
+  source = "../../../modules/gcp/artifact_registry"
+
+  location  = var.artifact_registry_location
+  repo_name = var.artifact_registry_repo
+}
 
 module "network" {
   count  = local.enable_private_networking ? 1 : 0
@@ -190,6 +199,10 @@ module "lb_backends" {
 }
 
 # Outputs adjusted (removed GKE related ones)
+
+output "artifact_registry_repo" {
+  value = local.enable_build_env ? module.artifact_registry[0].repository : null
+}
 
 output "gcs_bucket_name" {
   value = local.enable_gcs ? module.gcs[0].bucket_name : null
