@@ -7,20 +7,31 @@ locals {
   enable_apps      = var.enable_apps
 
   enable_private_networking = var.enable_private_networking
-  vpc_connector_name        = var.vpc_connector_name != "" ? var.vpc_connector_name : "${var.name_prefix}-cr-conn"
+  
+  # Dynamic naming logic based on app_name (Milestone: Naming Consistency)
+  network_name             = var.network_name != "" ? var.network_name : "${var.app_name}-vpc"
+  subnet_name              = var.subnet_name != "" ? var.subnet_name : "${var.app_name}-subnet"
+  artifact_registry_repo   = var.artifact_registry_repo != "" ? var.artifact_registry_repo : "${var.app_name}-repo"
+  gcs_bucket               = var.gcs_bucket != "" ? var.gcs_bucket : "${var.app_name}-storage"
+  cloud_sql_instance_name  = var.cloud_sql_instance_name != "" ? var.cloud_sql_instance_name : "${var.app_name}-db"
+  redis_instance_name      = var.redis_instance_name != "" ? var.redis_instance_name : "${var.app_name}-redis"
+  filestore_instance_name  = var.filestore_instance_name != "" ? var.filestore_instance_name : "${var.app_name}-fs"
+  app_service_name         = var.app_service_name != "" ? var.app_service_name : "${var.app_name}-backend"
+  ui_service_name          = var.ui_service_name != "" ? var.ui_service_name : "${var.app_name}-ui"
+  vpc_connector_name       = var.vpc_connector_name != "" ? var.vpc_connector_name : "${var.app_name}-cr-conn"
 
   enable_lb = var.enable_lb
 
   lb_routing_plan = {
     domain = var.base_domain
-    default_backend = (var.ui_service_name != "" ? "ui" : "backend")
+    default_backend = (local.ui_service_name != "" ? "ui" : "backend")
     backends = {
       backend = {
-        cloud_run_service = var.app_service_name
+        cloud_run_service = local.app_service_name
         region            = var.region
       }
       ui = {
-        cloud_run_service = var.ui_service_name
+        cloud_run_service = local.ui_service_name
         region            = var.region
       }
     }
@@ -40,17 +51,17 @@ module "artifact_registry" {
   source = "../../../modules/gcp/artifact_registry"
 
   location  = var.artifact_registry_location
-  repo_name = var.artifact_registry_repo
+  repo_name = local.artifact_registry_repo
 }
 
 module "network" {
   count  = local.enable_private_networking ? 1 : 0
   source = "../../../modules/gcp/network"
 
-  name_prefix              = var.name_prefix
+  app_name                 = var.app_name
   region                   = var.region
-  network_name             = var.network_name
-  subnet_name              = var.subnet_name
+  network_name             = local.network_name
+  subnet_name              = local.subnet_name
   subnet_cidr              = var.subnet_cidr
   pods_secondary_range     = var.pods_secondary_range
   services_secondary_range = var.services_secondary_range
@@ -60,7 +71,7 @@ module "iam" {
   source = "../../../modules/gcp/iam"
 
   project_id       = var.project_id
-  prefix           = coalesce(var.app_suffix, var.name_prefix)
+  app_name         = coalesce(var.app_suffix, var.app_name)
   service_accounts = var.iam_service_accounts
 }
 
@@ -68,6 +79,7 @@ module "monitoring" {
   source = "../../../modules/gcp/monitoring"
 
   project_id                  = var.project_id
+  app_name                    = var.app_name
   enable_logging              = var.enable_logging
   enable_monitoring           = var.enable_monitoring
   enable_alerts               = var.enable_alerts
@@ -80,7 +92,7 @@ module "gcs" {
   count  = local.enable_gcs ? 1 : 0
   source = "../../../modules/gcp/gcs"
 
-  name                     = var.gcs_bucket
+  name                     = local.gcs_bucket
   location                 = var.region
   force_destroy            = var.gcs_force_destroy
   uniform_bucket_level_access = var.gcs_uniform_bucket_level_access
@@ -90,7 +102,7 @@ module "cloud_sql" {
   count  = local.enable_cloud_sql ? 1 : 0
   source = "../../../modules/gcp/cloud_sql"
 
-  name                     = var.cloud_sql_instance_name
+  name                     = local.cloud_sql_instance_name
   database_version         = var.cloud_sql_database_version
   region                   = var.region
   tier                     = var.cloud_sql_tier
@@ -112,7 +124,7 @@ module "redis" {
   count  = local.enable_redis ? 1 : 0
   source = "../../../modules/gcp/redis"
 
-  name                    = var.redis_instance_name
+  name                    = local.redis_instance_name
   region                  = var.region
   tier                    = var.redis_tier
   memory_size_gb          = var.redis_memory_size_gb
@@ -124,9 +136,9 @@ module "filestore" {
   count  = local.enable_filestore ? 1 : 0
   source = "../../../modules/gcp/filestore"
 
-  name           = var.filestore_instance_name
+  name           = local.filestore_instance_name
   location       = var.zone != "" ? var.zone : "${var.region}-b"
-  network        = local.enable_private_networking ? module.network[0].network_self_link : ""
+  network        = local.enable_private_networking ? module.network[0].network_id : ""
   tier           = var.filestore_tier
   capacity_gb    = var.filestore_capacity_gb
   file_share_name = var.filestore_file_share_name
@@ -151,7 +163,7 @@ module "app_cloud_run" {
 
   project_id   = var.project_id
   region       = var.region
-  service_name = var.app_service_name
+  service_name = local.app_service_name
   image        = var.app_image
   env_vars     = var.app_env
 
@@ -160,18 +172,19 @@ module "app_cloud_run" {
   min_instances  = var.app_min_instances
   max_instances  = var.app_max_instances
   allow_unauth   = var.app_allow_unauth
+  container_port = 8000
 
   vpc_connector = local.enable_private_networking ? module.vpc_connector[0].name : null
   vpc_egress     = var.cloud_run_vpc_egress
 }
 
 module "ui_cloud_run" {
-  count        = local.enable_apps && var.ui_service_name != "" ? 1 : 0
+  count        = local.enable_apps && local.ui_service_name != "" ? 1 : 0
   source       = "../../../modules/gcp/cloud_run"
 
   project_id   = var.project_id
   region       = var.region
-  service_name = var.ui_service_name
+  service_name = local.ui_service_name
   image        = var.ui_image
   env_vars     = var.ui_env_vars
 
@@ -180,6 +193,7 @@ module "ui_cloud_run" {
   min_instances  = var.ui_min_instances
   max_instances  = var.ui_max_instances
   allow_unauth   = var.ui_allow_unauth
+  container_port = 3000
 
   vpc_connector = local.enable_private_networking ? module.vpc_connector[0].name : null
   vpc_egress     = var.cloud_run_vpc_egress
@@ -191,9 +205,9 @@ module "lb_backends" {
 
   project_id            = var.project_id
   region                = var.region
-  name_prefix            = var.name_prefix
-  backend_service_name   = var.app_service_name
-  ui_service_name        = var.ui_service_name
+  app_name              = var.app_name
+  backend_service_name   = local.app_service_name
+  ui_service_name        = local.ui_service_name
   lb_domain              = var.base_domain
   api_path_prefixes      = var.lb_api_path_prefixes
 }

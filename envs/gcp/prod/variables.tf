@@ -4,6 +4,12 @@ variable "project_id" {
   type = string
 }
 
+variable "app_name" {
+  type        = string
+  description = "The name of the application, used as a prefix for all resources"
+  default     = "mega"
+}
+
 variable "region" {
   type    = string
   default = "us-central1"
@@ -13,11 +19,6 @@ variable "zone" {
   type        = string
   description = "GCP zone for zonal resources (e.g. Filestore)."
   default     = ""
-}
-
-variable "name_prefix" {
-  type    = string
-  default = "mega-prod"
 }
 
 variable "base_domain" {
@@ -39,7 +40,7 @@ variable "artifact_registry_location" {
 variable "artifact_registry_repo" {
   type        = string
   description = "Artifact Registry repository name"
-  default     = "mega-prod"
+  default     = ""
 }
 
 
@@ -101,12 +102,12 @@ variable "log_sink_destination" {
 
 variable "network_name" {
   type    = string
-  default = "mega-prod-net"
+  default = ""
 }
 
 variable "subnet_name" {
   type    = string
-  default = "mega-prod-subnet"
+  default = ""
 }
 
 variable "subnet_cidr" {
