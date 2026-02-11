@@ -20,10 +20,10 @@ artifact_registry_repo     = "mega-prod"
 
 # Cloud Run Images
 # Note: GitHub Actions will push images directly to ${app_name}-repo.
-app_image                 = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/mega-backend:mono-0.1.0-pre-release"
-ui_image                  = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/mega-ui:mega-ui-staging-0.1.0-pre-release"
-orion_image               = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/orion-server:mono-0.1.0-pre-release"
-campsite_image            = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/campsite:mono-0.1.0-pre-release"
+app_image                 = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega:mono-0.1.0-pre-release"
+ui_image                  = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega:mega-ui-staging-0.1.0-pre-release"
+orion_image               = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega:orion-server-0.1.0-pre-release"
+campsite_image            = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega:campsite-0.1.0-pre-release"
 
 app_env = {
   RAILS_ENV                      = "production"
