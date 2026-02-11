@@ -18,14 +18,16 @@ gcs_force_destroy         = false
 enable_build_env           = true
 artifact_registry_repo     = "mega-prod"
 
-# Cloud Run backend application
-app_service_name          = "mega-backend"
-# Image path format: [LOCATION]-docker.pkg.dev/[PROJECT_ID]/[REPOSITORY_ID]/[IMAGE_NAME]:[TAG]
-app_image                 = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega-backend:mono-0.1.0-pre-release"
+# Cloud Run Images
+# Note: GitHub Actions will push images directly to ${app_name}-repo.
+app_image                 = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/mega-backend:mono-0.1.0-pre-release"
+ui_image                  = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/mega-ui:mega-ui-staging-0.1.0-pre-release"
+orion_image               = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/orion-server:mono-0.1.0-pre-release"
+campsite_image            = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-repo/campsite:mono-0.1.0-pre-release"
+
 app_env = {
   RAILS_ENV                      = "production"
   RACK_ENV                       = "production"
-  # Optimized for SQLite on Cloud Run to avoid PoolTimedOut panic
   MEGA_DATABASE__DB_TYPE         = "sqlite"
   MEGA_DATABASE__DB_PATH         = "/tmp/mega.db"
   MEGA_DATABASE__MIN_CONNECTION  = "1"
@@ -33,10 +35,6 @@ app_env = {
   MEGA_DATABASE__ACQUIRE_TIMEOUT = "30"
 }
 
-# Cloud Run UI (Next.js SSR)
-ui_service_name           = "mega-ui"
-# Image path format: [LOCATION]-docker.pkg.dev/[PROJECT_ID]/[REPOSITORY_ID]/[IMAGE_NAME]:[TAG]
-ui_image                  = "us-central1-docker.pkg.dev/your-gcp-project-id/mega-prod/mega-ui:mega-ui-staging-0.1.0-pre-release"
 ui_env_vars = {
   APP_ENV = "staging"
 }

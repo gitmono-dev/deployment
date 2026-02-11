@@ -8,23 +8,25 @@ locals {
 
   enable_private_networking = var.enable_private_networking
   
-  # Dynamic naming logic based on app_name (Milestone: Naming Consistency)
-  network_name             = var.network_name != "" ? var.network_name : "${var.app_name}-vpc"
-  subnet_name              = var.subnet_name != "" ? var.subnet_name : "${var.app_name}-subnet"
+  # Strictly use app_name for resource naming (Convention over Configuration)
+  network_name             = "${var.app_name}-vpc"
+  subnet_name              = "${var.app_name}-subnet"
   artifact_registry_repo   = var.artifact_registry_repo != "" ? var.artifact_registry_repo : "${var.app_name}-repo"
-  gcs_bucket               = var.gcs_bucket != "" ? var.gcs_bucket : "${var.app_name}-storage"
+  gcs_bucket               = "${var.app_name}-storage"
   cloud_sql_instance_name  = var.cloud_sql_instance_name != "" ? var.cloud_sql_instance_name : "${var.app_name}-db"
   redis_instance_name      = var.redis_instance_name != "" ? var.redis_instance_name : "${var.app_name}-redis"
   filestore_instance_name  = var.filestore_instance_name != "" ? var.filestore_instance_name : "${var.app_name}-fs"
-  app_service_name         = var.app_service_name != "" ? var.app_service_name : "${var.app_name}-backend"
-  ui_service_name          = var.ui_service_name != "" ? var.ui_service_name : "${var.app_name}-ui"
-  vpc_connector_name       = var.vpc_connector_name != "" ? var.vpc_connector_name : "${var.app_name}-cr-conn"
+  app_service_name         = "${var.app_name}-backend"
+  ui_service_name          = "${var.app_name}-ui"
+  orion_service_name       = "${var.app_name}-orion"
+  campsite_service_name    = "${var.app_name}-campsite"
+  vpc_connector_name       = "${var.app_name}-cr-conn"
 
   enable_lb = var.enable_lb
 
   lb_routing_plan = {
     domain = var.base_domain
-    default_backend = (local.ui_service_name != "" ? "ui" : "backend")
+    default_backend = "ui"
     backends = {
       backend = {
         cloud_run_service = local.app_service_name
@@ -32,6 +34,14 @@ locals {
       }
       ui = {
         cloud_run_service = local.ui_service_name
+        region            = var.region
+      }
+      orion = {
+        cloud_run_service = local.orion_service_name
+        region            = var.region
+      }
+      campsite = {
+        cloud_run_service = local.campsite_service_name
         region            = var.region
       }
     }
@@ -44,8 +54,7 @@ locals {
   }
 }
 
-# GKE related modules disabled/removed, Cloud Run introduced for app service
-
+# Artifact Registry module
 module "artifact_registry" {
   count  = local.enable_build_env ? 1 : 0
   source = "../../../modules/gcp/artifact_registry"
@@ -54,6 +63,7 @@ module "artifact_registry" {
   repo_name = local.artifact_registry_repo
 }
 
+# Network module
 module "network" {
   count  = local.enable_private_networking ? 1 : 0
   source = "../../../modules/gcp/network"
@@ -67,6 +77,7 @@ module "network" {
   services_secondary_range = var.services_secondary_range
 }
 
+# IAM module
 module "iam" {
   source = "../../../modules/gcp/iam"
 
@@ -75,6 +86,7 @@ module "iam" {
   service_accounts = var.iam_service_accounts
 }
 
+# Monitoring module
 module "monitoring" {
   source = "../../../modules/gcp/monitoring"
 
@@ -88,6 +100,7 @@ module "monitoring" {
   log_sink_destination        = var.log_sink_destination
 }
 
+# GCS module
 module "gcs" {
   count  = local.enable_gcs ? 1 : 0
   source = "../../../modules/gcp/gcs"
@@ -98,6 +111,7 @@ module "gcs" {
   uniform_bucket_level_access = var.gcs_uniform_bucket_level_access
 }
 
+# Cloud SQL module
 module "cloud_sql" {
   count  = local.enable_cloud_sql ? 1 : 0
   source = "../../../modules/gcp/cloud_sql"
@@ -120,6 +134,7 @@ module "cloud_sql" {
   deletion_protection      = var.cloud_sql_deletion_protection
 }
 
+# Redis module
 module "redis" {
   count  = local.enable_redis ? 1 : 0
   source = "../../../modules/gcp/redis"
@@ -132,6 +147,7 @@ module "redis" {
   transit_encryption_mode = var.redis_transit_encryption_mode
 }
 
+# Filestore module
 module "filestore" {
   count  = local.enable_filestore ? 1 : 0
   source = "../../../modules/gcp/filestore"
@@ -145,7 +161,7 @@ module "filestore" {
   reserved_ip_range = var.filestore_reserved_ip_range
 }
 
-# Serverless VPC Access Connector for Cloud Run private egress
+# Serverless VPC Access Connector
 module "vpc_connector" {
   count  = local.enable_private_networking ? 1 : 0
   source = "../../../modules/gcp/vpc_connector"
@@ -156,7 +172,7 @@ module "vpc_connector" {
   ip_cidr_range = var.vpc_connector_cidr
 }
 
-# Cloud Run module for application service
+# Cloud Run: Backend
 module "app_cloud_run" {
   count        = local.enable_apps ? 1 : 0
   source       = "../../../modules/gcp/cloud_run"
@@ -178,8 +194,9 @@ module "app_cloud_run" {
   vpc_egress     = var.cloud_run_vpc_egress
 }
 
+# Cloud Run: UI
 module "ui_cloud_run" {
-  count        = local.enable_apps && local.ui_service_name != "" ? 1 : 0
+  count        = local.enable_apps ? 1 : 0
   source       = "../../../modules/gcp/cloud_run"
 
   project_id   = var.project_id
@@ -199,6 +216,51 @@ module "ui_cloud_run" {
   vpc_egress     = var.cloud_run_vpc_egress
 }
 
+# Cloud Run: Orion Server
+module "orion_cloud_run" {
+  count        = local.enable_apps && var.orion_image != "" ? 1 : 0
+  source       = "../../../modules/gcp/cloud_run"
+
+  project_id   = var.project_id
+  region       = var.region
+  service_name = local.orion_service_name
+  image        = var.orion_image
+  env_vars     = var.orion_env_vars
+
+  cpu            = "1"
+  memory         = "512Mi"
+  min_instances  = 0
+  max_instances  = 10
+  allow_unauth   = true
+  container_port = 8000
+
+  vpc_connector = local.enable_private_networking ? module.vpc_connector[0].name : null
+  vpc_egress     = var.cloud_run_vpc_egress
+}
+
+# Cloud Run: Campsite
+module "campsite_cloud_run" {
+  count        = local.enable_apps && var.campsite_image != "" ? 1 : 0
+  source       = "../../../modules/gcp/cloud_run"
+
+  project_id   = var.project_id
+  region       = var.region
+  service_name = local.campsite_service_name
+  image        = var.campsite_image
+  env_vars     = var.campsite_env_vars
+
+  cpu            = "1"
+  memory         = "512Mi"
+  min_instances  = 0
+  max_instances  = 10
+  allow_unauth   = true
+  container_port = 8000
+
+  vpc_connector = local.enable_private_networking ? module.vpc_connector[0].name : null
+  vpc_egress     = var.cloud_run_vpc_egress
+}
+
+# Load Balancer module
 module "lb_backends" {
   count  = var.enable_lb ? 1 : 0
   source = "../../../modules/gcp/load_balancer"
@@ -212,8 +274,7 @@ module "lb_backends" {
   api_path_prefixes      = var.lb_api_path_prefixes
 }
 
-# Outputs adjusted (removed GKE related ones)
-
+# Outputs
 output "artifact_registry_repo" {
   value = local.enable_build_env ? module.artifact_registry[0].repository : null
 }
@@ -255,7 +316,15 @@ output "app_cloud_run_url" {
 }
 
 output "ui_cloud_run_url" {
-  value = local.enable_apps && var.ui_service_name != "" ? module.ui_cloud_run[0].url : null
+  value = local.enable_apps ? module.ui_cloud_run[0].url : null
+}
+
+output "orion_cloud_run_url" {
+  value = local.enable_apps && var.orion_image != "" ? module.orion_cloud_run[0].url : null
+}
+
+output "campsite_cloud_run_url" {
+  value = local.enable_apps && var.campsite_image != "" ? module.campsite_cloud_run[0].url : null
 }
 
 output "lb_backend_backend_service" {
