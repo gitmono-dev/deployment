@@ -2,6 +2,20 @@ resource "aws_ecs_cluster" "main" {
   name = var.cluster_name
 }
 
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  capacity_providers = [
+    "FARGATE",
+    "FARGATE_SPOT"
+  ]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+  }
+}
+
 data "aws_iam_role" "ecs_task_execution_role" {
   name = "ecsTaskExecutionRole"
 }
@@ -62,7 +76,12 @@ resource "aws_ecs_service" "app" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  force_new_deployment = true
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+  }
 
   network_configuration {
     subnets          = var.subnet_ids

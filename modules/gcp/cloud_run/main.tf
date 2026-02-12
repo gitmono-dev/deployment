@@ -49,6 +49,11 @@ variable "allow_unauth" {
   default = true
 }
 
+variable "enable_migrations" {
+  type    = bool
+  default = false
+}
+
 variable "container_port" {
   type    = number
   default = 8080
@@ -83,6 +88,15 @@ resource "google_cloud_run_service" "this" {
             memory = var.memory
           }
         }
+
+        command = var.enable_migrations ? ["/bin/sh", "-c"] : null
+        args    = var.enable_migrations ? [
+          <<-EOT
+            bin/rails db:create
+            bin/rails db:migrate
+            exec bundle exec puma
+          EOT
+        ] : null
         dynamic "env" {
           for_each = var.env_vars
           content {
