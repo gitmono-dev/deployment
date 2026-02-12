@@ -184,7 +184,7 @@ variable "cloud_sql_backup_enabled" {
 
 variable "cloud_sql_deletion_protection" {
   type    = bool
-  default = true
+  default = false
 }
 
 # --- Redis (Memorystore) ---
@@ -242,7 +242,7 @@ variable "app_image" {
   default = ""
 }
 
-variable "app_env" {
+variable "mono_env" {
   type    = map(string)
   default = {}
 }
